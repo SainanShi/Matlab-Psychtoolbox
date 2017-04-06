@@ -1,0 +1,159 @@
+try    
+%% Initialize
+ 
+cd('/Users/Stella/Documents/MATLAB/Psychtoolbox/AWM/AWM_Ex')
+clear all
+clc
+KbName('UnifyKeyNames');
+
+% Randomise(每个block运行前都需修改参数)！！！
+load trial_info_r1  
+load valid_freqs_r1
+ 
+
+%% open display window (turn full screen when in experiment!!!)
+
+color=[192 192 192];
+screenNum=0;
+[wPtr,rect]=Screen('OpenWindow',screenNum,color);
+Screen('FillRect',wPtr,color);
+Screen('TextSize',wPtr,30);
+HideCursor;
+
+%% Set  Parameters etc
+
+rect=Screen('Rect',wPtr);
+gridwidth = 50; % width of increase,totally 20 gridwidths
+gridheight = 100;
+gridleft = (rect(3)-gridwidth*20)/2 ; % Set up the grid table location
+gridup = (rect(4)-gridheight*5)/2 ;
+gridright = gridleft+gridwidth*20 ;
+griddown = gridup+gridheight*5 ;
+num_crossedline = 6 ;
+num_verticalline = 21 ;
+crossedxys=zeros(2,2*num_crossedline);
+verticalxys=zeros(2,2*num_verticalline);
+verticalwidth=ones(1,num_verticalline);
+verticalwidth(6)=2;
+verticalwidth(11)=2;
+verticalwidth(16)=2;
+increasewidth=10; % width of 1 Hz
+
+
+dur_tone = 0.5; % duration of tone in secs
+tone_interval = 0.5; % inter tone interval in secs
+delay_time = 1.5; % delay time
+wait_tonesequence_start = 0.5; % duration of warning cue
+wait_probetone_disp = 0.5; % duration of targeting cue(tone to recall)
+wait_next_trial = 0.5; % ITI, inter trials interval
+
+
+srate = 44100;  % samlping rate
+stim_maxf = 1000; % range of tone in sequence/ tone in probe
+stim_minf = 500;
+nrchannels = 2;
+volume = 0.5;
+
+
+
+%% pitch-matching task
+
+response_starttime = GetSecs;
+flag=1;
+% Loop while there is time.
+    while flag
+        
+        for g=1:2*num_verticalline
+            if mod(g,2)==1
+            verticalxys(1,g)= gridleft+((g-1)/2)*gridwidth ; % 竖线的起点的x坐标
+            verticalxys(2,g)= gridup ; % 竖线的起点的Y坐标
+            elseif mod(g,2)==0
+            verticalxys(1,g)= gridleft+((g-2)/2)*gridwidth ;  % 竖线的终点的x坐标
+            verticalxys(2,g)= griddown; % 竖线的终点的Y坐标
+            end
+        end
+        Screen('LineStipple',wPtr,0,2,[]);
+        Screen('DrawLines',wPtr,verticalxys,verticalwidth,[0 0 0]);
+        for g=1:2*num_crossedline
+            if mod(g,2)==1
+            crossedxys(1,g)= gridleft ; % 横线的起点的x坐标
+            crossedxys(2,g)= gridup+((g-1)/2)*gridheight; % 横线的起点的Y坐标
+            elseif mod(g,2)==0
+            crossedxys(1,g)= gridright ;  % 横线的终点的x坐标
+            crossedxys(2,g)= griddown-(6-g/2)*gridheight; % 横线的终点的Y坐标
+            end
+        end
+        Screen('LineStipple',wPtr,1,[],[]);
+        Screen('DrawLines',wPtr,crossedxys,[],[0 0 0]);
+        
+        Screen('FrameRect',wPtr,[0 0 0],[1150 700 1250 750],1); % draw 'done'
+        DrawFormattedText(wPtr,'done',1168,735,[0 0 0],[],[],[],[]);
+        DrawFormattedText(wPtr,'One grid means increase of 5Hz','center',50,[0 0 0],[],[],[],[]); % draw tips
+        DrawFormattedText(wPtr,'Please give response as accurate & soon as possible','center',90,[0 0 0],[],[],[],[]);
+         % draw freq values
+        firstx=gridleft-60;
+        secondx=gridright+12;
+        for t=1:5
+            fitstvalue = stim_minf+(t-1)*100 ;
+            fitstvalue = num2str(fitstvalue);
+            secondvalue = stim_minf+t*100 ;
+            secondvalue = num2str(secondvalue);
+            yvalue=gridup+8+((2*t-1)/2)*gridheight;
+            DrawFormattedText(wPtr,fitstvalue,firstx,yvalue,[0 0 0],[],[],[],[]); 
+            DrawFormattedText(wPtr,secondvalue,secondx,yvalue,[0 0 0],[],[],[],[]); 
+        end
+       Screen(wPtr,'Flip');
+       
+       ShowCursor;
+       InitializePsychSound(1);
+       pahandle = PsychPortAudio('Open',[],1,1,srate,nrchannels);
+       PsychPortAudio('Volume', pahandle, volume);
+       
+       
+       while 1
+           
+       if 
+       
+       [clicks,x,y,buttons] = GetClicks(wPtr); 
+       if any(clicks) && x>gridleft-(1/2)*gridwidth && x<gridright+(1/2)*gridwidth && y>gridup && y<griddown
+           Screen('FillOval',wPtr,[255 0 0],[x-5 y-5 x+5 y+5],10);
+           response_freq=[ceil(((y-gridup)/gridheight))*100+400]+[ceil(((x-gridleft+0.5*increasewidth)/increasewidth))*1-1];
+           responsefreq_beepval=MakeBeep(response_freq,dur_tone,srate);
+           PsychPortAudio('FillBuffer', pahandle, [responsefreq_beepval;responsefreq_beepval]);
+           PsychPortAudio('Start', pahandle, 1, 0, 1);
+           PsychPortAudio('Stop', pahandle, 1, 1);
+       elseif any(clicks) && x>1150 && x<1250 && y>700 && y<750
+           break;
+       end 
+  
+       end
+      
+       
+       
+    end
+response_stoptime = GetSecs ;
+response_timeinterval = response_stoptime-response_starttime;
+PsychPortAudio('Close', pahandle);
+
+
+
+%% quit 
+
+DrawFormattedText(wPtr,'the end of this session','center','center',[0 0 0],[],[],[],[]); 
+Screen(wPtr,'Flip');
+WaitSecs(2);
+Screen('CloseAll');
+ShowCursor;
+
+catch
+    Screen('CloseAll');
+    ShowCursor;
+    psychrethrow(psychlasterror);
+    sca; 
+end
+
+
+
+
+
+
